@@ -1,0 +1,18 @@
+# /etc/inittab for Novie's Alpine guest.
+#
+# Alpine's stock inittab, with the tty1 getty replaced by an autologin one: the VM exists to
+# show a single XFCE desktop to the app's window and to MCP clients, so there is nobody to
+# type a user name. /root/.profile turns that login into X.
+
+::sysinit:/sbin/openrc sysinit
+::sysinit:/sbin/openrc boot
+::wait:/sbin/openrc default
+
+# The desktop. agetty --autologin runs `login -f root`, which skips authentication.
+tty1::respawn:/sbin/agetty --autologin root --noclear --noissue tty1 linux
+# The serial console the app captures to serial.log
+ttyAMA0::respawn:/sbin/getty -L 115200 ttyAMA0 vt100
+
+::ctrlaltdel:/sbin/reboot
+::shutdown:/sbin/openrc shutdown
+::shutdown:/sbin/killall5 -9

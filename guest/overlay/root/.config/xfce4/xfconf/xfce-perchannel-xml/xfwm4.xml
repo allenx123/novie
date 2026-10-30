@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- This is the per-user xfconf store, not /etc/xdg: xfconf reads the shipped system
+     defaults first and merges whatever is here over them. A file of the same name under
+     /etc/xdg replaces the shipped one outright, which is how XFCE lost its Failsafe session
+     definition and refused to start at all.
+
+     Compositing off: every shadow and fade is a framebuffer update the app has to pull over
+     VNC and an MCP client has to wait out, and none of it helps an agent read the screen. -->
+<channel name="xfwm4" version="1.0">
+  <property name="general" type="empty">
+    <property name="use_compositing" type="bool" value="false"/>
+  </property>
+</channel>

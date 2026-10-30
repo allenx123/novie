@@ -1,0 +1,17 @@
+#!/bin/sh
+# The guest keeps its clock in UTC (QEMU runs with -rtc base=utc and chronyd corrects drift,
+# which is also how a VM resumed with a stale clock catches up). That leaves the desktop
+# showing UTC rather than the time on the Mac next to it, so the app passes the host's time
+# zone in through QEMU's fw_cfg device and this points /etc/localtime at it.
+#
+# fw_cfg is read-only and carries nothing but this name, so there is still no way into the VM.
+tz_file=/sys/firmware/qemu_fw_cfg/by_name/opt/novie/timezone/raw
+[ -r "$tz_file" ] || exit 0
+tz=$(tr -d '\0\n\r' < "$tz_file")
+case "$tz" in
+    "" | */../* | /*) exit 0 ;;  # only a plain zone name, e.g. Europe/Berlin
+esac
+[ -f "/usr/share/zoneinfo/$tz" ] || exit 0
+ln -sf "/usr/share/zoneinfo/$tz" /etc/localtime
+echo "$tz" > /etc/timezone
+echo "novie: time zone set to $tz"

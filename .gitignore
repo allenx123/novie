@@ -1,0 +1,15 @@
+# Build output (app bundle, guest payload)
+/build/
+/app/.build/
+/app/.swiftpm/
+
+
+# Alpine ISO: downloaded by guest/fetch_iso.sh. See README.
+/guest/iso/*.iso
+
+
+.DS_Store
+*.log
+
+# Guest image: built by guest/build_image.sh, several GB.
+/guest/image/

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Per-user xfconf store; see the note in xfwm4.xml for why this is not in /etc/xdg.
+
+     The VM is wiped on every boot (see the disk overlay in VMManager), so saving a session
+     would only ever restore one from the build. Logout must not stop to ask about it. -->
+<channel name="xfce4-session" version="1.0">
+  <property name="general" type="empty">
+    <property name="SaveOnExit" type="bool" value="false"/>
+    <property name="AutoSave" type="bool" value="false"/>
+  </property>
+  <property name="shutdown" type="empty">
+    <property name="LockScreen" type="bool" value="false"/>
+  </property>
+  <property name="splash" type="empty">
+    <property name="Engine" type="string" value=""/>
+  </property>
+</channel>

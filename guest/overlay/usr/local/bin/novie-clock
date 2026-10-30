@@ -1,0 +1,42 @@
+#!/bin/sh
+# Keeps the guest's clock on the Mac's, by watching the emulated RTC.
+#
+# The app suspends the VM to a file on quit and resumes it later, so the guest comes back with
+# a clock that stopped the moment it was suspended -- as far behind as the app spent closed.
+# Nothing in the guest is told that happened. chronyd cannot be relied on to repair it: after
+# a jump that large its samples straddle the gap, so it rejects every source it has ("Jitter
+# ... exceeds maxjitter", "Root distance ... exceeds maxdistance") and makes no clock update at
+# all, measured as still 249s behind five minutes after a resume.
+#
+# QEMU's RTC, though, is right the moment the VM comes back: with -rtc base=utc it follows the
+# host across the migrate/-incoming pair, so it reads the Mac's time to the second while the
+# system clock is still minutes behind. Comparing the two and stepping the system clock is all
+# the recovery needs, and it needs no network to do it.
+#
+# This only ever moves the system clock. The RTC is never written -- /etc/conf.d/hwclock sets
+# clock_systohc=NO and provision.sh turns chrony's rtcsync off -- so a stale clock can never be
+# fed back into the one source here that is trusted.
+set -eu
+
+interval=${NOVIE_CLOCK_INTERVAL:-20}
+# The RTC has a one-second resolution and chronyd keeps the clock well inside that, so
+# anything past a few seconds is a real divergence rather than rounding.
+tolerance=${NOVIE_CLOCK_TOLERANCE:-3}
+rtc=/sys/class/rtc/rtc0/since_epoch
+
+[ -r "$rtc" ] || { echo "novie-clock: no $rtc to read; nothing to do" >&2; exit 1; }
+
+while :; do
+    sleep "$interval"
+    hw=$(cat "$rtc" 2>/dev/null) || continue
+    sys=$(date -u +%s)
+    drift=$((hw - sys))
+    [ "$drift" -lt 0 ] && drift=$((-drift))
+    [ "$drift" -gt "$tolerance" ] || continue
+
+    hwclock --hctosys --utc
+    logger -t novie-clock "system clock was $((sys - hw))s off the RTC; stepped it to $(date -u)"
+    # chronyd is still holding the samples that span the gap, and will reject its sources until
+    # they age out. Restarting it throws them away, so NTP picks the clock back up from here.
+    rc-service chronyd restart >/dev/null 2>&1 || true
+done

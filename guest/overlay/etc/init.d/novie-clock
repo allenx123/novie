@@ -1,0 +1,14 @@
+#!/sbin/openrc-run
+# Supervises novie-clock, which steps the system clock back onto the Mac's after the app
+# resumes the VM from a saved state. See /usr/local/bin/novie-clock for why the RTC is what
+# it reads, and AGENTS.md ("Time") for how the clock is handled overall.
+supervisor=supervise-daemon
+name="novie-clock"
+description="Keeps the guest clock on the host's after a resume"
+command="/usr/local/bin/novie-clock"
+respawn_delay=10
+
+depend() {
+    # hwclock has set the clock from the RTC by now, and chronyd is what this hands back to
+    after hwclock chronyd
+}

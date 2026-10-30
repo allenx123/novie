@@ -1,0 +1,2 @@
+# fw_cfg is how the app hands the guest its time zone (see /etc/local.d/novie-timezone.start)
+qemu_fw_cfg

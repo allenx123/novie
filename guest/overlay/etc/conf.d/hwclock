@@ -1,0 +1,9 @@
+# The emulated RTC follows the host clock (QEMU is started with -rtc base=utc), so reading it
+# at boot is how the guest gets the right time -- and reading it again is how a VM resumed from
+# a saved state gets its stale clock put right, which /usr/local/bin/novie-clock does.
+#
+# clock_systohc stays NO for that reason: the RTC is the host's clock, the one source in here
+# that a just-resumed guest has no way of being wrong about, so nothing in the guest writes it.
+clock="UTC"
+clock_hctosys="YES"
+clock_systohc="NO"

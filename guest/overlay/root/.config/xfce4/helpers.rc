@@ -1,0 +1,7 @@
+# XFCE's preferred applications. Without this, the panel's Web Browser button runs
+# `exo-open --launch WebBrowser`, finds nothing registered and puts up "Failed to execute
+# default Web Browser. I/O error." -- even though Firefox is installed.
+# The values are helper names from /usr/share/xfce4/helpers.
+WebBrowser=firefox
+TerminalEmulator=xfce4-terminal
+FileManager=thunar
