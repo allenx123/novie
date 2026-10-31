@@ -37,6 +37,22 @@ codex mcp add novie -- /Applications/Novie.app/Contents/MacOS/NovieMCP --mcp
 
 5. Give your AI agent a computer use task and watch it work!
 
+## Features
+
+- **Lightweight VM sandbox runs locally in your MacOS.** Comes with a terminal, file manager and Firefox.
+- **Let an AI agent use it.** Turn on MCP in the menu and an agent can perform mouse/keyboard actions in the desktop.
+- **You can use it yourself.** Hit Take Control and your mouse and keyboard go to the VM.
+- **Only one of you at a time.** While you have control, the agent is locked out.
+- **Hide it.** Hide the app and your AI agent can continue using it in the background.
+- **Quit then reopen and it picks up where you left off.** When you quit Novie, the VM's current state will be saved to disk.
+
+## Use Cases
+
+- Online shopping
+- Booking plane tickets
+- Schedule doctor's appointment
+- etc.
+
 ## Architecture
 
 Everything runs locally on your Mac — the agent, the app and the VM.
@@ -60,10 +76,3 @@ flowchart LR
     MCP -- "screenshot" --> A
     MCP <-- "perform actions · take screenshot" --> VM
 ```
-
-## Use Cases
-
-- Online shopping
-- Booking plane tickets
-- Schedule doctor's appointment
-- etc.
