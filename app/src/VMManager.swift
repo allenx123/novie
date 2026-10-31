@@ -57,9 +57,15 @@ final class VMManager {
     var hasSavedState: Bool { FileManager.default.fileExists(atPath: stateURL.path) }
     var isRunning: Bool { process?.isRunning ?? false }
 
-    init() {
+    /// `runDir` is only passed in by tests, so they can exercise the state files without
+    /// touching the real run directory (and the VM the person may have suspended in it).
+    init(runDir: URL? = nil) {
+        if let runDir {
+            self.runDir = runDir
+            return
+        }
         let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        runDir = support.appendingPathComponent("Novie", isDirectory: true)
+        self.runDir = support.appendingPathComponent("Novie", isDirectory: true)
     }
 
     /// QEMU_PATH if set, else the copy build.sh bundles in Contents/MacOS, else Homebrew's

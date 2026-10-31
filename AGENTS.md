@@ -67,6 +67,61 @@ image unless something it is built from changed:
 Then quit the app (⌘Q, which also shuts down the VM) and reopen it. A rebuild invalidates the
 saved VM state (see *Suspend and resume*), so the VM boots fresh.
 
+## Tests
+
+```sh
+./test.sh                       # build and run the unit tests (about two minutes)
+./test.sh --coverage            # the same, plus an llvm-cov report over app/src
+./test.sh ActionRunner          # only suites whose name contains this
+```
+
+`test.sh` compiles `app/src/` (minus `main.swift`, whose top-level code is the app's own
+entry point) together with `app/tests/` into one binary and runs it. There is no XCTest and
+no SwiftPM here: `swift test` cannot build on this toolchain at all — the swift-testing macro
+plugin fails to resolve (`external macro implementation type 'TestingMacros.TestDeclarationMacro'
+could not be found`) and `--enable-code-coverage` fails outright — so `app/tests/Harness.swift`
+is a ~60-line harness (`suite`, `expect`, `equal`) and `app/tests/main.swift` is the entry
+point. Plain `swiftc`, for the same reason `build.sh` uses it.
+
+The tests drive the real code rather than re-implementing it: `ActionRunner` plays action
+lists into a recording `VMInput` (`FakeInput`), and `QMPClient`, `RFBClient` and `MCPServer`
+are each driven over a real Unix socket by a fake that speaks the other side of the protocol
+(QMP's JSON lines, the RFB 3.8 handshake and framebuffer updates, and MCPServer's own line
+protocol). `MCPBridge` is the one that can't be called in process — `run()` is a loop over
+stdin that ends in `exit()` — so the bridge suite re-runs the test binary itself with a
+`--bridge-child` flag and speaks JSON-RPC to it over a pipe, which also covers the bridge
+talking to a real `MCPServer` end to end. So the suites cover the two things that were hardest to get right and are easiest
+to break again: the shift behaviour of QEMU's VNC server (the `echo "Novie: 100%"` case from
+*Gotchas* is a test), and that nothing is ever left held after a list ends, fails, runs out
+of time or is interrupted by Take Control.
+
+Where it stands: 551 checks in 153 suites, about two minutes to build and run (the suites
+sleep where `ActionRunner` does, since its gaps between events are part of what is being
+tested). Line coverage of the files the tests can reach:
+
+| File | Lines | Left |
+|---|---|---|
+| `RFBClient.swift` | 99.6% | one closing brace |
+| `ComputerActions.swift` | 99.1% | the generic `catch` in `run()`, which `ActionRunner` can't reach — it only ever throws `Failure` |
+| `QMPClient.swift` | 96.7% | closing braces |
+| `MCPServer.swift` | 94.7% | `accept()` error paths, and the `send()` partial-write loop |
+| `MCPBridge.swift` | 91.0% | the socket-path-too-long guard, and a half-written reply |
+
+That is 96% of those five files together, and 58% of `app/src` as a whole — the rest is the
+three files below, which need a real window, a real QEMU and the app bundle's guest image.
+
+What is **not** covered, and why:
+
+| Not tested | Why |
+|---|---|
+| `main.swift` | Top-level AppKit code and `AppDelegate`; it is the one file left out of the test binary, since its `main` would clash with the harness's. |
+| `MainWindowController`, `VMDisplayView` | AppKit views and a window. `MainWindowController.init` starts the VM and the MCP server as a side effect, so it can't be built in a test. |
+| `VMManager.start()`, `prepareDisks()`, `suspend()`'s success path, `finishResume()` | They launch QEMU and `qemu-img` and read the guest image out of `Bundle.main`, none of which exist for the test binary. The path, state-file and lookup logic around them is tested. |
+
+`VMManager.init` takes an optional `runDir` so the tests can use a temporary directory. The
+real app passes nothing and still uses `~/Library/Application Support/Novie` — without that
+seam, a test of `discardSavedState()` would throw away the VM the person had suspended.
+
 ## Sharing the app
 
 The built app bundles QEMU, so the Macs that run it need nothing installed. They do need Apple
@@ -205,7 +260,9 @@ log — `log stream --predicate 'eventMessage CONTAINS "Novie:"'`, or Console.ap
 | `guest/provision.sh` | Guest side of the install: partitions, installs Alpine + XFCE, configures and bootloads it. |
 | `guest/overlay/` | Files copied into the guest's root filesystem: the inittab that autologins into X, `root/.xinitrc` (the XFCE session), per-user xfconf overrides, `etc/local.d/novie-timezone.start`, and `usr/local/bin/novie-clock` with the `etc/init.d/novie-clock` service that supervises it. |
 | `app/src/` | The Swift app: `VMManager` (QEMU launch/args, the disk overlay, suspend/resume), `QMPClient` (QEMU control socket), `RFBClient` (VNC client: framebuffer + input), `ComputerActions` (`VMInput` and the `ActionRunner` that plays an action list), `VMDisplayView` (rendering + mouse/keyboard forwarding for take control), `MainWindowController` (the window and `MCPHost`), `MCPServer` (socket other agents drive the VM through) and `MCPBridge` (the `--mcp` stdio MCP server). |
-| `app/Package.swift` | For opening the sources in Xcode only; `build.sh` uses `swiftc`. |
+| `app/Package.swift` | For opening the sources in Xcode only; `build.sh` uses `swiftc`, and `swift test` does not work here (see *Tests*). |
+| `app/tests/` | The unit tests and their harness: `Harness.swift` (`suite`/`expect`/`equal`), `main.swift` (entry point), `Fakes.swift` (`FakeInput`, `FakeHost`, the fake socket server) and one file per source file under test. |
+| `test.sh` | Builds and runs the tests; `--coverage` adds an llvm-cov report. |
 | `bundle/Info.plist` | The app bundle's Info.plist. |
 | `bundle/Novie.icns` | The app icon|
 | `bundle_qemu.sh` | Copies QEMU, `qemu-img`, their dylibs and firmware into the app bundle. |
@@ -318,6 +375,26 @@ log — `log stream --predicate 'eventMessage CONTAINS "Novie:"'`, or Console.ap
   `build_image.sh` gets the kernel it boots.
 - **SwiftPM's default build system fails on this machine** ("Unknown error parsing property list"),
   hence plain `swiftc` in `build.sh`.
+- **`swift test` cannot run here either, which is why the tests have their own harness.** The
+  macro plugin behind swift-testing doesn't resolve (`external macro implementation type
+  'TestingMacros.TestDeclarationMacro' could not be found`), and `--enable-code-coverage`
+  fails on top of that; there is no Xcode, so `xcrun xctest` doesn't exist to fall back on.
+  Coverage comes from `swiftc -profile-generate -profile-coverage-mapping` and `llvm-cov`
+  instead, which both ship with the command line tools (see `test.sh`).
+- **A test binary's main thread doesn't drain the main dispatch queue**, so `MCPServer`'s
+  `onMain` deadlocks in a test that looks perfectly ordinary. `MCPServer` hops to the main
+  queue for every host callback — including the `maySendInput` check between actions — and a
+  plain command-line `main` that just called the suites inline would block there forever.
+  `app/tests/main.swift` runs the suites on a background thread and leaves `RunLoop.main.run()`
+  on the main one, which is the same arrangement AppKit gives the real app.
+- **`sockaddr_un.sun_path` is 104 bytes, and a UUID under `$TMPDIR` already overruns it.** The
+  first version of the tests' `TempDir` used `NSTemporaryDirectory()` plus `UUID().uuidString`,
+  and every suite that puts a socket in there failed with "socket path too long" — which is
+  the same limit `MCPServer.start()`, `QMPClient.init` and `RFBClient.connect` each check for.
+  `TempDir` now uses a six-digit suffix and falls back to `/tmp` when `$TMPDIR` is too long.
+- **`send()` doesn't work on a pipe**, only on a socket. The tests' `writeAll` helper started
+  out using `send()`, which silently wrote nothing to the `LineReader` suites' pipes and left
+  the reader blocked in `read()` forever. It uses `write()` now, which works for both.
 - **Testing the bundled QEMU on a Mac with Homebrew can hide missing files**: QEMU falls back to
   its compiled-in Homebrew data directory when a file isn't in `-L`. Block `/opt/homebrew` with
   `sandbox-exec` (see Known limitations) to test it properly. That's how the missing VNC keymap was

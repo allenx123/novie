@@ -37,9 +37,33 @@ codex mcp add novie -- /Applications/Novie.app/Contents/MacOS/NovieMCP --mcp
 
 5. Give your AI agent a computer use task and watch it work!
 
+## Architecture
+
+Everything locally on your Mac — the agent, the app and the VM.
+
+```mermaid
+flowchart LR
+    H(["Human"])
+
+    subgraph mac["MacOS"]
+        A["AI agent<br/>Claude Code · Codex · Opencode"]
+
+        subgraph app["Novie"]
+            direction TB
+            MCP["MCP server"]
+            VM["Lightweight VM sandbox"]
+        end
+    end
+
+    H -- "manual mouse and keyboard actions" --> VM
+    A -- "actions" --> MCP
+    MCP -- "screenshot" --> A
+    MCP <-- "perform actions · get screenshot" --> VM
+```
+
 ## Use Cases
 
 - Online shopping
-- Booking travel/hotels
-- Download and upload documents
+- Booking plane tickets
+- Schedule doctor's appointment
 - etc.
