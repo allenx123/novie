@@ -5,8 +5,6 @@
   </p>
 </h1>
 
-
-
 Novie gives your local AI agent (Claude Code, Codex, Opencode, Hermes, etc.) a dedicated lightweight VM sandbox for running computer use tasks. It runs as a MacOS desktop app and AI agents communicate with it via MCP. 
 
 ## Demo
@@ -15,15 +13,15 @@ Novie gives your local AI agent (Claude Code, Codex, Opencode, Hermes, etc.) a d
 
 ## Install and run
 
-**Requirements: MacOS 26+, 8+ GB memory, 5+ GB of free disk space, and runs on Apple Silicon chip**
+**Requirements: MacOS 26+, 8+ GB memory, 10+ GB of free disk space, and runs on Apple Silicon chip**
 
-1. Click `Install Novie` above to download Novie as a ZIP
+1. Click **Install Novie** above to download Novie as a ZIP
 
 2. Unzip the file and move the app into your Applications
 
 3. Open Novie from Applications, click on **Novie** in the top left corner and click **Allow MCP Connections**
 
-4. Open terminal and run the command for your agent
+4. Open terminal and run the appropriate command to add the Novie MCP to your agent
 
 Claude Code: 
 ```sh
