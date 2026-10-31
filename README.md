@@ -55,7 +55,7 @@ codex mcp add novie -- /Applications/Novie.app/Contents/MacOS/NovieMCP --mcp
 
 ## Architecture
 
-Below is high-level design diagram of Novie.
+Below is the high-level design diagram of Novie.
 
 ```mermaid
 flowchart LR
