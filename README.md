@@ -2,7 +2,7 @@
   <img src="assets/novie_logo.png" alt="Novie logo" height="128">
 </h1>
 
-Novie gives your local AI agent (Claude Code, Codex, Opencode, Hermes, etc.) a dedicated lightweight VM sandbox for running computer use tasks. It runs as a MacOS desktop app and AI agents communicate with it via MCP. 
+Novie gives your local AI agent (Claude Code, Codex, Opencode, Hermes, etc.) a dedicated lightweight VM sandbox for running computer use tasks. It runs as a MacOS desktop app and a local MCP server. Using Novie's MCP tools, your AI agent can control the VM sandbox with keyboard/mouse actions, just like a human would.
 
 ## Demo
 
