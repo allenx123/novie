@@ -1,9 +1,6 @@
-<h2 align="center">
+<h1 align="center">
   <img src="assets/novie_logo.png" alt="Novie logo" height="128">
-  <p align="center">
-    <a href="https://github.com/allenx123/novie/releases/download/v1.0.0/Novie.zip">Install Novie</a>
-  </p>
-</h2>
+</h1>
 
 Novie gives your local AI agent (Claude Code, Codex, Opencode, Hermes, etc.) a dedicated lightweight VM sandbox for running computer use tasks. It runs as a MacOS desktop app and AI agents communicate with it via MCP. 
 
@@ -15,7 +12,7 @@ Novie gives your local AI agent (Claude Code, Codex, Opencode, Hermes, etc.) a d
 
 **Requirements: MacOS 26+, 8+ GB memory, 10+ GB of free disk space, and runs on Apple Silicon chip**
 
-1. Click **Install Novie** above to download Novie as a ZIP
+1. Click [Install](https://github.com/allenx123/novie/releases/download/v1.0.0/Novie.zip) to download Novie as a ZIP
 
 2. Unzip the file and move the app into your Applications
 
