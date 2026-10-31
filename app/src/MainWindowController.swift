@@ -60,6 +60,15 @@ final class MainWindowController: NSWindowController, NSWindowDelegate {
         controlButton.target = self
         controlButton.action = #selector(toggleControl)
         controlButton.toolTip = "Use the VM's mouse and keyboard yourself (⇧⌘K). Connected agents are locked out while you do."
+        // The title changes with the state, so hold the button at the width of the wider of
+        // the two: otherwise Restart VM shifts sideways every time control is taken.
+        controlButton.title = "Release Control"
+        controlButton.sizeToFit()
+        let controlWidth = controlButton.frame.width
+        controlButton.title = "Take Control"
+        controlButton.sizeToFit()
+        controlButton.widthAnchor.constraint(
+            equalToConstant: max(controlWidth, controlButton.frame.width)).isActive = true
         restartButton.target = self
         restartButton.action = #selector(restartVM)
         restartButton.toolTip = "Boot the VM fresh, discarding anything in it"
@@ -266,6 +275,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate {
         // down when the VM is resumed
         display.controlEnabled = false
         controlButton.state = .off
+        syncControlButtonTitle()
         // Stop taking MCP calls first: an action list playing into a VM being written out
         // would be lost half-done
         mcp?.stop()
@@ -300,7 +310,14 @@ final class MainWindowController: NSWindowController, NSWindowDelegate {
         let on = controlButton.state == .on
         display.controlEnabled = on
         window?.makeFirstResponder(on ? display : nil)
+        syncControlButtonTitle()
         refreshStatus()
+    }
+
+    /// The button says what clicking it will do next, so the title follows the state wherever
+    /// it is changed from: the button itself, the menu item, or quitting.
+    private func syncControlButtonTitle() {
+        controlButton.title = controlButton.state == .on ? "Release Control" : "Take Control"
     }
 
     func toggleControlFromMenu() {
