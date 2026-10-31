@@ -55,7 +55,7 @@ codex mcp add novie -- /Applications/Novie.app/Contents/MacOS/NovieMCP --mcp
 
 ## Architecture
 
-Everything runs locally on your Mac — the agent, the app and the VM.
+Below is high-level design diagram of Novie.
 
 ```mermaid
 flowchart LR
