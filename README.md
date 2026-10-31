@@ -58,7 +58,7 @@ flowchart LR
     H -- "manual mouse/keyboard actions" --> VM
     A -- "mouse/keyboard actions" --> MCP
     MCP -- "screenshot" --> A
-    MCP <-- "perform actions · get screenshot" --> VM
+    MCP <-- "perform actions · take screenshot" --> VM
 ```
 
 ## Use Cases
