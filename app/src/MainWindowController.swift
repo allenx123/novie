@@ -16,6 +16,9 @@ final class MainWindowController: NSWindowController, NSWindowDelegate {
     private let controlButton = NSButton(title: "Take Control", target: nil, action: nil)
     private let restartButton = NSButton(title: "Restart VM", target: nil, action: nil)
     private let bar = NSStackView()
+    /// The same setting as Novie → Allow MCP Connections, in the window's title bar: it's what
+    /// decides whether a connected agent may drive the VM at all (see MCPServer.isAllowed).
+    private let mcpSwitch = NSSwitch()
 
     /// The guest screen's width / height. The window is kept at this ratio (see
     /// `windowWillResize`), so the VM's screen fills `display` whatever size the window is.
@@ -33,6 +36,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate {
         super.init(window: window)
         window.delegate = self
         buildUI()
+        buildTitlebarAccessory()
         applyAspect()
         window.center()
         vm.onExit = { [weak self] code in self?.vmExited(code) }
@@ -90,6 +94,34 @@ final class MainWindowController: NSWindowController, NSWindowDelegate {
             bar.trailingAnchor.constraint(equalTo: display.trailingAnchor),
             bar.bottomAnchor.constraint(equalTo: content.bottomAnchor, constant: -8),
         ])
+    }
+
+    /// The MCP toggle lives in the title bar, at the window's top right: it's a setting rather
+    /// than an action on the VM, so it stays out of the button bar below the screen.
+    private func buildTitlebarAccessory() {
+        guard let window else { return }
+        let tip = "Let other agents on this Mac work the VM's mouse and keyboard over MCP. "
+            + "Same setting as Novie → Allow MCP Connections."
+        mcpSwitch.target = self
+        mcpSwitch.action = #selector(toggleMCPFromSwitch)
+        mcpSwitch.controlSize = .small
+        mcpSwitch.toolTip = tip
+        mcpSwitch.setAccessibilityLabel("Allow MCP Connections")
+        let label = NSTextField(labelWithString: "MCP")
+        label.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
+        label.textColor = .secondaryLabelColor
+        label.toolTip = tip
+        let stack = NSStackView(views: [label, mcpSwitch])
+        stack.orientation = .horizontal
+        stack.alignment = .centerY
+        stack.spacing = 6
+        stack.edgeInsets = NSEdgeInsets(top: 2, left: 8, bottom: 2, right: 10)
+        stack.frame = NSRect(origin: .zero, size: stack.fittingSize)
+        let accessory = NSTitlebarAccessoryViewController()
+        accessory.view = stack
+        accessory.layoutAttribute = .right
+        window.addTitlebarAccessoryViewController(accessory)
+        syncMCPSwitch()
     }
 
     // MARK: window size
@@ -179,7 +211,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate {
         } else if MCPServer.isAllowed {
             setStatus("VM running · MCP connections allowed")
         } else {
-            setStatus("VM running · MCP connections off (Novie → Allow MCP Connections)")
+            setStatus("VM running · MCP connections off (turn on the MCP switch above)")
         }
     }
 
@@ -270,7 +302,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate {
         }
         isSaving = true
         setStatus("Saving the VM so it resumes next time…")
-        for control in [controlButton, restartButton] as [NSControl] { control.isEnabled = false }
+        for control in [controlButton, restartButton, mcpSwitch] as [NSControl] { control.isEnabled = false }
         // Let go of anything held: a key still down when the state is written comes back
         // down when the VM is resumed
         display.controlEnabled = false
@@ -352,9 +384,29 @@ extension MainWindowController: MCPHost {
         }
     }
 
+    /// The window's own toggle. It writes the same setting the menu item does, so whichever
+    /// one is used, the other follows (the menu item's state is set when its menu opens).
+    @objc private func toggleMCPFromSwitch() {
+        setMCPAllowed(mcpSwitch.state == .on)
+    }
+
+    /// The one way the setting is changed, from the switch or from the menu item.
+    func setMCPAllowed(_ allowed: Bool) {
+        MCPServer.setAllowed(allowed)
+        noteMCPSetting(allowed)
+    }
+
     func noteMCPSetting(_ allowed: Bool) {
         NSLog("Novie: MCP connections %@", allowed ? "allowed" : "off")
+        syncMCPSwitch()
         refreshStatus()
+    }
+
+    /// Puts the switch where the setting actually is, so it's right at launch and after the
+    /// menu item has been used.
+    private func syncMCPSwitch() {
+        let allowed = MCPServer.isAllowed
+        if (mcpSwitch.state == .on) != allowed { mcpSwitch.state = allowed ? .on : .off }
     }
 
     func mcpInput() -> MCPInput {

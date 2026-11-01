@@ -35,8 +35,9 @@ checks its SHA-256 (`guest/fetch_iso.sh`), then installs Alpine and XFCE onto a 
 (`guest/build_image.sh`, see *The guest image* below). The image is cached in `guest/image/`, so
 only the first build pays for it; `./build.sh --force-image` builds it again.
 
-1. Turn on **Novie → Allow MCP Connections** (it's off until you do) and point an agent at the
-   app's own binary with `--mcp` (see *Letting other agents use Novie* below).
+1. Turn on MCP (it's off until you do) with the **MCP** switch at the right of the window's
+   title bar, or **Novie → Allow MCP Connections** — the same setting either way — and point an
+   agent at the app's own binary with `--mcp` (see *Letting other agents use Novie* below).
 2. The desktop appears in about 20 seconds. Input works from the first frame — it goes to
    emulated hardware, so the boot screens can be driven too.
 3. **Take Control** (⇧⌘K) forwards your mouse and keyboard to the VM (orange border) and locks
@@ -193,8 +194,12 @@ between actions, so taking control stops a list part-way.
   `NovieMCP --mcp` (`MCPBridge`) is the stdio MCP server that forwards to it, which is why
   clients need nothing installed; the bridge answers `initialize` and `tools/list` itself, so the
   server still starts when the app is closed and tool calls explain why they can't run. It's off
-  until **Novie → Allow MCP Connections** (`allowMCPConnections` in UserDefaults). One call plays
-  at a time (`MCPServer.claim()`), so two clients can't fight over the pointer.
+  until the person allows it, from the **MCP** switch in the window's title bar
+  (`MainWindowController.buildTitlebarAccessory`) or **Novie → Allow MCP Connections**; both go
+  through `setMCPAllowed` to the one `allowMCPConnections` flag in UserDefaults, the switch is
+  put back in step by `noteMCPSetting` and the menu item's checkmark by `validateMenuItem`, so
+  neither can show the wrong state. One call plays at a time (`MCPServer.claim()`), so two
+  clients can't fight over the pointer.
 - **Suspend and resume**: on quit, `VMManager.suspend()` uses QEMU's QMP socket (`qmp.sock` in the
   run directory) to `stop` the VM and `migrate` it to `file:…/vmstate` (RAM + device state, so its
   size follows what the guest is actually using: ~850 MB and ~8 s for an idle desktop, ~1.9 GB and
@@ -411,7 +416,8 @@ log — `log stream --predicate 'eventMessage CONTAINS "Novie:"'`, or Console.ap
   (QEMU allows it, and the app asks for a shared session), do the RFB 3.8 handshake with security
   type None, and send raw KeyEvent/PointerEvent messages. That is how the shift behaviour above was
   pinned down without the app in the way.
-- **Talking to the MCP layer**: turn on Novie → Allow MCP Connections, then pipe JSON-RPC into the
+- **Talking to the MCP layer**: turn on the window's MCP switch (or Novie → Allow MCP
+  Connections), then pipe JSON-RPC into the
   app's own binary, which is the stdio MCP server:
   ```sh
   printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","clientInfo":{"name":"test"}}}' \

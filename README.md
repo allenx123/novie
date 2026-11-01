@@ -16,7 +16,7 @@ Novie gives your local AI agent (Claude Code, Codex, Opencode, Hermes, etc.) a d
 
 2. Unzip the file and move the app into your Applications
 
-3. Open Novie from Applications, click on **Novie** in the top left corner and click **Allow MCP Connections**
+3. Open Novie from Applications and toggle on **MCP** at the top right corner
 
 4. Open terminal and run the appropriate command to add the Novie MCP to your agent
 

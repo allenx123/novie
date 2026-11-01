@@ -1,6 +1,6 @@
 import AppKit
 
-final class AppDelegate: NSObject, NSApplicationDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     private var controller: MainWindowController?
     private var saveVMOnQuit = true
 
@@ -35,12 +35,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func toggleControl() { controller?.toggleControlFromMenu() }
 
-    /// Other agents reach the app through MCP only while this is on (see MCPServer)
+    /// Other agents reach the app through MCP only while this is on (see MCPServer). The same
+    /// setting is in the window's title bar, so the change goes through the window: the switch
+    /// there and this item's checkmark both follow it.
     @objc private func toggleMCP(_ item: NSMenuItem) {
         let allowed = !MCPServer.isAllowed
-        UserDefaults.standard.set(allowed, forKey: MCPServer.defaultsKey)
+        if let controller { controller.setMCPAllowed(allowed) } else { MCPServer.setAllowed(allowed) }
         item.state = allowed ? .on : .off
-        controller?.noteMCPSetting(allowed)
+    }
+
+    /// The checkmark is set as the menu opens, so it's right even when the setting was last
+    /// changed with the window's switch.
+    func validateMenuItem(_ item: NSMenuItem) -> Bool {
+        if item.action == #selector(toggleMCP) { item.state = MCPServer.isAllowed ? .on : .off }
+        return true
     }
 
     @objc private func showVMLog() { controller?.showVMLog() }

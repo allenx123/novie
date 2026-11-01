@@ -28,6 +28,9 @@ final class MCPServer {
     /// Off until the person allows it in the Novie menu: a connected agent drives their VM.
     static let defaultsKey = "allowMCPConnections"
     static var isAllowed: Bool { UserDefaults.standard.bool(forKey: defaultsKey) }
+    /// The one place the setting is written, so the window's switch and the menu item can't
+    /// disagree about where it lives.
+    static func setAllowed(_ allowed: Bool) { UserDefaults.standard.set(allowed, forKey: defaultsKey) }
 
     /// How long one `computer` call may spend playing its actions, in seconds.
     static let callBudget: TimeInterval = 600
@@ -132,8 +135,8 @@ final class MCPServer {
         var reader = LineReader(fd: fd)
         guard let hello = reader.next(), let greeting = Self.parse(hello) else { return }
         guard Self.isAllowed else {
-            send(fd, ["error": "MCP access is turned off in Novie (Novie → Allow MCP Connections)."])
-            onMain { self.host?.mcpNote("An MCP client tried to connect. Turn on Novie → Allow MCP Connections to let it in.") }
+            send(fd, ["error": "MCP access is turned off in Novie (turn on the MCP switch in its title bar, or Novie → Allow MCP Connections)."])
+            onMain { self.host?.mcpNote("An MCP client tried to connect. Turn on the MCP switch in the title bar to let it in.") }
             return
         }
         guard let given = greeting["hello"] as? String, !token.isEmpty, given == token else {
