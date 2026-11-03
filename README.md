@@ -10,7 +10,7 @@ Novie gives your local AI agent (Claude Code, Codex, Opencode, Hermes, etc.) a d
 
 ## Install and run
 
-**Requirements: MacOS 26+, 8+ GB memory, 10+ GB of free disk space, and runs on Apple Silicon chip**
+**Requirements: MacOS 27+, 8+ GB memory, 10+ GB of free disk space, and runs on Apple Silicon chip**
 
 1. Click [Install](https://github.com/allenx123/novie/releases/download/v1.0.0/Novie.zip) to download Novie as a ZIP
 
