@@ -2,14 +2,17 @@
 #
 # Alpine's stock inittab, with the tty1 getty replaced by an autologin one: the VM exists to
 # show a single XFCE desktop to the app's window and to MCP clients, so there is nobody to
-# type a user name. /root/.profile turns that login into X.
+# type a user name. /home/novie/.profile turns that login into X.
 
 ::sysinit:/sbin/openrc sysinit
 ::sysinit:/sbin/openrc boot
 ::wait:/sbin/openrc default
 
-# The desktop. agetty --autologin runs `login -f root`, which skips authentication.
-tty1::respawn:/sbin/agetty --autologin root --noclear --noissue tty1 linux
+# The desktop, as the unprivileged user provision.sh creates: agetty --autologin runs
+# `login -f novie`, which skips authentication but still sets the session up properly --
+# it chowns /dev/tty1 to novie, which is what lets Xorg's setuid wrapper start X for a
+# user who is not root (see /etc/X11/Xwrapper.config).
+tty1::respawn:/sbin/agetty --autologin novie --noclear --noissue tty1 linux
 # The serial console the app captures to serial.log
 ttyAMA0::respawn:/sbin/getty -L 115200 ttyAMA0 vt100
 

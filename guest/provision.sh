@@ -13,6 +13,16 @@ step() { echo; echo "### novie: $*"; }
 
 # Everything the guest needs. Kept in one apk call so a missing name fails before any of the
 # slow work: the base system and bootloader, then X, then XFCE itself.
+#
+# This list is expanded unquoted below, so it is words and nothing else -- a comment inside it
+# would be handed to apk as package names.
+#
+# chromium is in community, and brings both /usr/bin/chromium and /usr/bin/chromium-browser
+# with it, so nothing here has to make the second name. It is deliberately not pinned to a
+# version: v3.24's community repo serves one chromium at a time (156.0.8078.79-r0 as this was
+# written) and replaces it with every security release, so a pin is a build that breaks on
+# Alpine's schedule rather than ours. font-freefont is what Alpine now calls ttf-freefont,
+# which it still answers to as a `provides` alias; the real name is used, like font-dejavu.
 PACKAGES="
 alpine-base linux-virt
 grub grub-efi
@@ -24,8 +34,8 @@ xorg-server xinit xf86-input-libinput xkeyboard-config setxkbmap xrandr xset xse
 mesa-dri-gallium mesa-gl
 dbus dbus-x11 elogind polkit-elogind
 xfce4 xfce4-terminal xfce4-screenshooter
-adwaita-icon-theme font-dejavu
-firefox
+adwaita-icon-theme font-dejavu font-freefont
+firefox chromium
 nano
 "
 
@@ -84,16 +94,17 @@ cp /etc/resolv.conf /mnt/etc/resolv.conf
 apk add --root /mnt --initdb --no-cache --no-progress $PACKAGES
 
 step "copying the guest overlay in"
-# guest/overlay in the repo: the inittab that autologins into X, the X session, and the
-# startup script that takes the host's time zone out of fw_cfg.
+# guest/overlay in the repo: the inittab that autologins into X, the desktop user's X session
+# and XFCE settings, and the startup scripts that take the host's time zone out of fw_cfg and
+# make the session's runtime directory.
 cp -a /seed/overlay/. /mnt/
-# The overlay is packed on a Mac, so make sure every path it adds belongs to root once it is
-# in the guest. Firefox is the one that notices: it refuses to start as root unless $HOME is
-# owned by root too ("Running Firefox as root in a regular user's session is not supported").
+# The overlay is packed on a Mac, so without this every path it adds arrives owned by whoever
+# ran the build (uid 501, typically). Everything in it is root's except the desktop user's
+# home directory, which is handed to novie in the chroot below once that user exists.
 (cd /seed/overlay && find . -mindepth 1) | sed 's|^\./||' | while IFS= read -r path; do
     chown root:root "/mnt/$path"
 done
-chmod +x /mnt/root/.xinitrc /mnt/etc/local.d/*.start \
+chmod +x /mnt/home/novie/.xinitrc /mnt/etc/local.d/*.start \
          /mnt/etc/init.d/novie-clock /mnt/usr/local/bin/novie-clock
 
 step "configuring the installed system"
@@ -119,11 +130,39 @@ for s in devfs dmesg udev udev-trigger udev-settle; do rc-update add $s sysinit;
 for s in modules sysctl hostname bootmisc syslog hwclock localmount; do rc-update add $s boot; done
 for s in killprocs mount-ro savecache; do rc-update add $s shutdown; done
 for s in dhcpcd chronyd dbus elogind local udev-postmount novie-clock; do rc-update add $s default; done
+# polkitd is dbus-activated, so the desktop works without this; starting it with everything
+# else just means the first thing to ask is not waiting on an activation.
+if [ -f /etc/init.d/polkit ]; then rc-update add polkit default; fi
 
-echo "### novie: root password"
+echo "### novie: the desktop user"
+# The desktop runs as an ordinary user, not root, so that the programs in it behave the way
+# they do on any other Linux desktop: Firefox refuses to run as root at all unless $HOME is
+# root's too, and plenty of other software either warns, writes its files somewhere else, or
+# quietly skips a safety check when it finds itself with uid 0.
+#
+# -H, not adduser's own mkdir: /home/novie already exists, because the overlay's dotfiles were
+# copied into it above. busybox adduser only warns when its mkdir fails and then skips the
+# chown it would have done next, which would leave the home directory owned by root -- the
+# exact thing Firefox refuses to start in. So the home directory is handed over here instead.
+adduser -D -H -h /home/novie -s /bin/sh -g "Novie desktop" novie
+chown -R novie:novie /home/novie
+chmod 755 /home/novie
+# What a seat needs: the framebuffer and the evdev devices Xorg opens, and the sound and
+# network groups a desktop expects to be in. Checked rather than assumed -- addgroup would
+# happily create a group of its own name here, and the desktop would come up without the
+# device access it was supposed to get.
+for g in video input audio netdev; do
+    grep -q "^$g:" /etc/group || { echo "no $g group in the guest" >&2; exit 1; }
+    addgroup novie "$g"
+done
+
+echo "### novie: passwords"
 # The VM has no network path into it (user-mode NAT, nothing forwarded), and tty1 logs in
-# without a password. This is only so polkit and `su` inside the desktop have something.
+# without one. These are only so that `su` in a terminal inside the desktop works, and so
+# that anything that does still ask (pkexec, say) has an answer. The desktop's own power
+# actions do not: /etc/polkit-1/rules.d/50-novie.rules grants those to novie outright.
 echo 'root:novie' | chpasswd
+echo 'novie:novie' | chpasswd
 
 echo "### novie: clock"
 ln -sf /usr/share/zoneinfo/UTC /etc/localtime

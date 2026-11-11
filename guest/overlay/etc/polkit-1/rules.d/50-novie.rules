@@ -1,0 +1,17 @@
+// Novie: the desktop user may use the power actions in XFCE's menus without being asked for
+// a password.
+//
+// polkit asks elogind whether the caller's session is "active" before it trusts a desktop
+// with these, and nothing here creates a logind session (see
+// /etc/local.d/novie-runtimedir.start), so every one of them would otherwise put up an
+// authentication dialog instead. That dialog is worse than the risk it guards: an agent
+// driving this VM over MCP has nothing but pixels to go on, and a modal password prompt in
+// front of the desktop is how it gets stranded.
+//
+// Only login1 is granted, and only to this one user. pkexec and anything else that would
+// amount to a root shell still asks, and the password still exists for it.
+polkit.addRule(function (action, subject) {
+    if (subject.user === "novie" && action.id.indexOf("org.freedesktop.login1.") === 0) {
+        return polkit.Result.YES;
+    }
+});

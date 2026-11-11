@@ -46,9 +46,11 @@ only the first build pays for it; `./build.sh --force-image` builds it again.
 4. **Restart VM** boots it fresh.
 5. **Hide Novie** (⌘H) gets the window out of the way while an agent keeps working in it.
 
-The guest logs in as root with no prompt (`agetty --autologin`) and the root password is `novie`,
-which only matters for polkit prompts and `su` inside the desktop: there is no network path into
-the VM to use it from.
+The guest logs itself in as `novie`, an ordinary user, with no prompt (`agetty --autologin`), and
+the desktop runs as that user so the programs in it behave the way they do on any other Linux
+desktop. Both `novie` and `root` have the password `novie`, which only matters for `su` in a
+terminal inside the desktop and for anything that still asks for a password there: there is no
+network path into the VM to use it from.
 
 ## Rebuilding after a change
 
@@ -240,15 +242,22 @@ boots. There is no way to run `apk` on macOS, so the install happens in a throwa
    of QEMU's `fw_cfg` device and runs `provision.sh` from it.
 3. `guest/provision.sh` partitions the disk, installs Alpine and XFCE into it with
    `apk add --root`, copies `guest/overlay/` over the result, and configures it in a `chroot`
-   (openrc runlevels, udev for Xorg's input devices, `mkinitfs`, and GRUB on the EFI system
-   partition).
+   (openrc runlevels, the unprivileged `novie` user the desktop runs as, udev for Xorg's input
+   devices, `mkinitfs`, and GRUB on the EFI system partition).
 4. The image is compacted with `qemu-img convert` and stamped with a hash of everything it was
    built from, so later builds reuse it.
 
-The desktop it produces is XFCE with xfce4-terminal, Thunar and Firefox, logged in as root with
-no prompt. Everything in the guest is configured at this point; at runtime the only things of ours
-in it are the overlay's two clock scripts -- `local.d/novie-timezone.start`, which sets the time
-zone once at boot, and `novie-clock`, which watches the RTC so a resumed VM's clock is put right.
+The desktop it produces is XFCE with xfce4-terminal, Thunar and two browsers -- Firefox, and
+Chromium from Alpine's community repo, whose package installs `/usr/bin/chromium` and
+`/usr/bin/chromium-browser` both, so neither name needs making here. Chromium is the default
+browser, by both of the mechanisms that decide that (see *Gotchas*). Fonts are DejaVu and
+FreeFont (`font-freefont`, which is what Alpine now calls `ttf-freefont`). It is logged in with no
+prompt as `novie`, a normal user in the `video`, `input`, `audio` and `netdev` groups. Everything in the
+guest is configured at this point; at runtime the only things of ours in it are three small shell
+scripts, all run by openrc before the desktop starts: `local.d/novie-timezone.start`, which sets
+the time zone once at boot, `local.d/novie-runtimedir.start`, which makes the session's
+`$XDG_RUNTIME_DIR`, and `novie-clock`, which watches the RTC so a resumed VM's clock is put
+right.
 
 Logs: `~/Library/Application Support/Novie/serial.log` (guest console) and `qemu.log`.
 In the app, use VM → Show VM Log. The install's own console log is `guest/image/provision.log`.
@@ -263,7 +272,7 @@ log — `log stream --predicate 'eventMessage CONTAINS "Novie:"'`, or Console.ap
 | `guest/build_image.sh` | Builds and caches the guest disk image; the entry point for everything below. |
 | `guest/provision.py` | Host side of the install: runs the throwaway QEMU VM and drives its serial console. |
 | `guest/provision.sh` | Guest side of the install: partitions, installs Alpine + XFCE, configures and bootloads it. |
-| `guest/overlay/` | Files copied into the guest's root filesystem: the inittab that autologins into X, `root/.xinitrc` (the XFCE session), per-user xfconf overrides, `etc/local.d/novie-timezone.start`, and `usr/local/bin/novie-clock` with the `etc/init.d/novie-clock` service that supervises it. |
+| `guest/overlay/` | Files copied into the guest's root filesystem: the inittab that autologins `novie` into X, `home/novie/.xinitrc` (the XFCE session) with that user's `.profile`, xfconf overrides and helper registrations, `etc/X11/Xwrapper.config` (how a non-root user is allowed to start X), `etc/xdg/mimeapps.list` (which browser opens a link), `etc/chromium/zz-novie.conf` (the flags Chromium always gets), `etc/polkit-1/rules.d/50-novie.rules`, `etc/local.d/novie-timezone.start` and `novie-runtimedir.start`, and `usr/local/bin/novie-clock` with the `etc/init.d/novie-clock` service that supervises it. |
 | `app/src/` | The Swift app: `VMManager` (QEMU launch/args, the disk overlay, suspend/resume), `QMPClient` (QEMU control socket), `RFBClient` (VNC client: framebuffer + input), `ComputerActions` (`VMInput` and the `ActionRunner` that plays an action list), `VMDisplayView` (rendering + mouse/keyboard forwarding for take control), `MainWindowController` (the window and `MCPHost`), `MCPServer` (socket other agents drive the VM through) and `MCPBridge` (the `--mcp` stdio MCP server). |
 | `app/Package.swift` | For opening the sources in Xcode only; `build.sh` uses `swiftc`, and `swift test` does not work here (see *Tests*). |
 | `app/tests/` | The unit tests and their harness: `Harness.swift` (`suite`/`expect`/`equal`), `main.swift` (entry point), `Fakes.swift` (`FakeInput`, `FakeHost`, the fake socket server) and one file per source file under test. |
@@ -295,19 +304,75 @@ log — `log stream --predicate 'eventMessage CONTAINS "Novie:"'`, or Console.ap
   overlay.
 - **Everything in `guest/overlay/` arrives owned by the Mac user who built the image** unless
   something stops it: the seed tarball is packed on macOS, so `cp -a` faithfully reproduces uid
-  501 inside the guest. Firefox is what notices — it refuses to start as root unless `$HOME` is
-  owned by root too, and dies with "Running Firefox as root in a regular user's session is not
-  supported. ($HOME is /root which is owned by uid 501.)". `build_image.sh` packs the tarball with
-  `--uid 0 --gid 0` and `provision.sh` chowns every path the overlay adds.
+  501 inside the guest. Firefox is what notices, whichever user the desktop runs as — back when
+  that was root it refused to start unless `$HOME` was root's too, and died with "Running Firefox
+  as root in a regular user's session is not supported. ($HOME is /root which is owned by uid
+  501.)". `build_image.sh` packs the tarball with `--uid 0 --gid 0` and `provision.sh` chowns
+  every path the overlay adds to root, then hands `/home/novie` to the desktop user once it
+  exists. Both halves matter: a home directory left as root's is the Firefox failure again, and
+  an `/etc` the desktop user owns would be a way out of the account.
+- **`adduser` will not fix the home directory the overlay already created.** The overlay ships
+  `/home/novie` with the dotfiles in it, so by the time `adduser` runs the directory exists.
+  busybox's `adduser` only warns ("/home/novie: File exists") and *skips the chown it would have
+  done next*, because both are in one `||` chain — leaving a root-owned `$HOME` and a Firefox
+  that won't start, out of a command that looked like it worked. `provision.sh` passes `-H` and
+  chowns the directory itself.
+- **Xorg as a non-root user works here only because of its setuid wrapper.** `xorg-server` ships
+  `/usr/libexec/Xorg.wrap` mode `4755`, and `/usr/bin/Xorg` is a shell stub that runs it; without
+  it the `startx` in `~novie/.profile` could not open the VT or the evdev devices. The wrapper's
+  `allowed_users=console` means it will only do this for a user who owns the tty they are on,
+  which `agetty --autologin` arranges for `novie` on tty1 (`login` chowns it) and for nobody
+  else. `guest/overlay/etc/X11/Xwrapper.config` writes that default out explicitly, since the
+  desktop depends on it. Xorg itself still ends up with root's privileges, exactly as before, so
+  its log is still `/var/log/Xorg.0.log`.
+- **Nothing in the guest creates a logind session, which is what polkit wants to see.** The
+  desktop is a normal user now, but `/bin/login` is busybox's and has no PAM, so there is no
+  `pam_elogind` to register a session — `loginctl` lists none, and polkit treats the desktop as
+  inactive and falls back to asking for a password for things a seated user would just be
+  allowed. That matters because a modal password dialog is how an MCP client gets stranded: it
+  has nothing but pixels to go on. Two overlay files stand in for the session instead:
+  `etc/polkit-1/rules.d/50-novie.rules` grants `novie` the `org.freedesktop.login1.*` actions
+  behind XFCE's power menu, and `etc/local.d/novie-runtimedir.start` makes `/run/user/<uid>` that
+  `pam_elogind` would have made. The alternative — PAM plus `util-linux-login` — puts the one
+  thing the whole app depends on, the autologin that brings the desktop up, behind a stack of PAM
+  modules.
 - **XFCE's panel launchers go through `exo-open --launch`, which needs a registered helper.**
   Installing Firefox is not enough: with no `~/.config/xfce4/helpers.rc` the panel's Web Browser
   button just says "Failed to execute default Web Browser. I/O error." The overlay ships that
   file, naming helpers from `/usr/share/xfce4/helpers`.
+- **A fresh Chromium profile opens a modal dialog before it opens the web.** "Chromium
+  Additional Terms of Service", with Accept and Cancel, in front of the browser window. It only
+  shows on first run, but first run is *every* run here: the guest's disk is a throwaway overlay,
+  so the profile is new on every fresh boot. With Chromium as the default browser that dialog
+  would be the first thing an agent met whenever a link was opened, and an agent has nothing but
+  pixels to tell it apart from the page it asked for. `guest/overlay/etc/chromium/zz-novie.conf`
+  adds `--no-first-run` (and `--no-default-browser-check`) for every launch. It appends to
+  `CHROMIUM_FLAGS` rather than replacing Alpine's `chromium.conf`, which the launcher allows
+  because it sources all of `/etc/chromium/*.conf` in glob order -- hence the name.
+- **Chromium asks the keyring for a password on a desktop that has no keyring.** With a Secret
+  Service on the session bus, Chromium keeps saved passwords there rather than in its profile,
+  and `gnome-keyring`, `gcr` and `libsecret` all arrive as XFCE dependencies. Neither daemon
+  runs until something asks: Chromium's first libsecret call dbus-activates
+  `gnome-keyring-daemon`, which finds no keyring and activates `gcr-prompter` for "Choose
+  password for new keyring", modal, over the browser. `--password-store=basic` in
+  `zz-novie.conf` stops it. This one hides from a test that launches Chromium over `su`: that
+  loses `DBUS_SESSION_BUS_ADDRESS`, so libsecret finds no bus, Chromium falls back silently and
+  the dialog never appears. Reproducing it needs the session's whole environment, the way the
+  panel launches things.
+- **"Default browser" is two settings, and installing a second browser split them.** The panel's
+  Web Browser button asks exo, which reads `helpers.rc`; a link opened through `xdg-open` or GIO
+  — from Thunar, or any app that shells out — asks the XDG mime database instead, and nothing in
+  the guest stated a preference there. GIO then takes the first entry in
+  `/usr/share/applications/mimeinfo.cache`, which is alphabetical: with Firefox alone that was
+  Firefox, and adding Chromium moved it, on one of the two paths only. Measured in the built
+  image: `xdg-mime query default x-scheme-handler/http` said `chromium.desktop` while the panel
+  button still started Firefox. `etc/xdg/mimeapps.list` in the overlay now states it, and
+  `helpers.rc` names the same browser.
 - **An xfconf file in `/etc/xdg` replaces the shipped one; it doesn't merge with it.** Dropping a
   two-property `xfce4-session.xml` there to turn session saving off took XFCE's Failsafe session
   definition with it, and the desktop came up as nothing but an "Unable to load a failsafe session"
-  dialog. Per-user overrides go in `/root/.config/xfce4/xfconf/xfce-perchannel-xml/`, which xfconf
-  merges over the system defaults, and that is where `guest/overlay` keeps them.
+  dialog. Per-user overrides go in `~novie/.config/xfce4/xfconf/xfce-perchannel-xml/`, which
+  xfconf merges over the system defaults, and that is where `guest/overlay` keeps them.
 - **`chronyd` does not fix the clock of a resumed VM, and two separate things stop it.** The
   first is that Alpine's `chrony.conf` ships `makestep 1.0 3`, so chronyd may jump the clock only
   during its first three clock updates — every session spends those in its first minutes, and
@@ -411,7 +476,8 @@ log — `log stream --predicate 'eventMessage CONTAINS "Novie:"'`, or Console.ap
   everything openrc prints, and the guest's own X log is `/tmp/startx.log` inside the VM.
   QEMU's errors go to `qemu.log` in the same directory.
 - **Shell in the VM**: Take Control, then open Terminal from the XFCE panel or applications menu.
-  The disk overlay is thrown away on the next fresh boot, so ad-hoc changes there don't last.
+  That shell is `novie`, not root; `su` (password `novie`) is how to get root in it. The disk
+  overlay is thrown away on the next fresh boot, so ad-hoc changes there don't last.
 - **Ground truth about input**: a second VNC client can connect to `vnc.sock` alongside the app
   (QEMU allows it, and the app asks for a shared session), do the RFB 3.8 handshake with security
   type None, and send raw KeyEvent/PointerEvent messages. That is how the shift behaviour above was
@@ -447,6 +513,10 @@ log — `log stream --predicate 'eventMessage CONTAINS "Novie:"'`, or Console.ap
   actually running); a client only has pixels to go on.
 - The person at the Mac and a connected agent share one pointer. Take Control is the only
   arbitration: while it's on, MCP gets nothing, and while it's off, the agent may click at any time.
+- The desktop user is unprivileged but has no logind session, since busybox's `login` has no PAM
+  (see *Gotchas*), so `loginctl` is empty and polkit sees an inactive subject. The power actions
+  in XFCE's menus are granted to that user by a polkit rule to keep a password dialog off the
+  screen; anything else privileged still asks, and `pkexec` deliberately does.
 - Persistence is only by suspend/resume. Everything the guest writes lives in a disk overlay that
   Restart VM, a rebuild, and a crash or force quit of the app all throw away (the state is only
   saved on a normal quit).
@@ -459,6 +529,9 @@ log — `log stream --predicate 'eventMessage CONTAINS "Novie:"'`, or Console.ap
 - The window has one status line and no history; details go to the system log.
 - The bundled QEMU is a full Homebrew build (~50 MB with libraries); most of its features and
   libraries (gnutls, libssh, libusb, ...) are unused here.
+- The guest image is ~1.4 GB, and the app bundle carries all of it. Chromium is about 400 MB of
+  that: dropping it from `PACKAGES` in `provision.sh` takes the image back to ~1.0 GB with
+  Firefox still there.
 - If the VM config changes (other devices, a different NIC model), the firmware it loads may need
   adding to `rom_files` in `bundle_qemu.sh`. Test with Homebrew hidden:
   `sandbox-exec -p '(version 1)(allow default)(deny file-read* (subpath "/opt/homebrew"))' <app>/Contents/MacOS/qemu-system-aarch64 -L <app>/Contents/Resources/qemu ...`

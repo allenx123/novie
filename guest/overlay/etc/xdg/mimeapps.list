@@ -1,0 +1,19 @@
+# Novie: which browser opens a link or an HTML file.
+#
+# Without this file nothing in the guest states a preference, and GIO falls back to the first
+# entry in /usr/share/applications/mimeinfo.cache -- which is alphabetical, so the answer
+# depends on which browsers happen to be installed. With Firefox alone that was Firefox by
+# default; adding Chromium silently moved it, and only for the paths that go through
+# xdg-open or GIO (a link clicked in Thunar, an app that shells out). The XFCE panel's own
+# Web Browser button never consults this at all -- it asks exo, which reads helpers.rc -- so
+# the two could disagree without either being configured. They are both pointed at Chromium
+# here and in ~novie/.config/xfce4/helpers.rc.
+#
+# This is the system default from the XDG mime-apps spec: a user's own
+# ~/.config/mimeapps.list still overrides it, and it merges with what the packages registered
+# rather than replacing it (unlike an xfconf channel file in /etc/xdg, see AGENTS.md).
+[Default Applications]
+x-scheme-handler/http=chromium.desktop
+x-scheme-handler/https=chromium.desktop
+text/html=chromium.desktop
+application/xhtml+xml=chromium.desktop

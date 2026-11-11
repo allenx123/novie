@@ -1,0 +1,11 @@
+#!/bin/sh
+# Novie: makes $XDG_RUNTIME_DIR for the desktop user before the autologin on tty1 happens
+# (inittab waits for the default runlevel, which this is part of, before starting that getty).
+#
+# On an ordinary distribution pam_elogind creates this directory as the user logs in. The
+# guest has no PAM in its login path -- /bin/login is busybox's, and replacing it to gain a
+# logind session would put the one thing the whole app depends on, the autologin that brings
+# the desktop up, behind a stack of PAM modules. So the directory is made here instead, and
+# ~novie/.profile points XDG_RUNTIME_DIR at it.
+uid=$(id -u novie) || exit 0
+install -d -m 700 -o novie -g novie "/run/user/$uid"
