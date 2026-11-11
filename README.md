@@ -1,5 +1,5 @@
 <h1 align="center">
-  <img src="assets/novie_logo.png" alt="Novie logo" height="128">
+  <img src="assets/novie_logo.png" alt="Novie logo" width="150">
 </h1>
 
 Novie gives your local AI agent (Claude Code, Codex, Opencode, Hermes, etc.) a dedicated lightweight VM sandbox for running computer use tasks. It runs as a MacOS desktop app and a local MCP server. Using Novie's MCP tools, your AI agent can control the VM sandbox with keyboard/mouse actions, just like a human would.
