@@ -28,7 +28,11 @@ enum MCPBridge {
              {"action": "wait"} and look at the screenshot before deciding what to click next. \
              One call may spend up to 10 minutes playing its actions. The person at the Mac \
              can take the VM's mouse and keyboard at any time, and while they hold them this \
-             tool does nothing and returns no screenshot.
+             tool does nothing and returns no screenshot. There is one VM with one mouse and \
+             keyboard, so two or more subagents trying to work the desktop \
+             at the same time would fight over each other. If multiple subagents \
+             each need the desktop to run a task, they must take it in turns — one finishes its \
+             whole task before the next starts — rather than calling in parallel.
              """,
              ["actions": [
                  "type": "array",
