@@ -14,7 +14,8 @@ final class MainWindowController: NSWindowController, NSWindowDelegate {
     private let display = VMDisplayView(frame: NSRect(x: 0, y: 0, width: 1280, height: 800))
     private let statusLabel = NSTextField(labelWithString: "Starting…")
     private let controlButton = NSButton(title: "Take Control", target: nil, action: nil)
-    private let restartButton = NSButton(title: "Restart VM", target: nil, action: nil)
+    /// Holds the one button below the screen. Restarting the VM is in the VM menu instead
+    /// (`restartVMFromMenu`), so nothing but Take Control is in the window itself.
     private let bar = NSStackView()
     /// The same setting as Novie → Allow MCP Connections, in the window's title bar: it's what
     /// decides whether a connected agent may drive the VM at all (see MCPServer.isAllowed).
@@ -30,7 +31,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate {
 
     init() {
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 1296, height: 848),  // 1280x800 plus the margins and bar
+            contentRect: NSRect(x: 0, y: 0, width: 1280, height: 840),  // 1280x800 plus the button bar
             styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
         window.title = "Novie"
         super.init(window: window)
@@ -65,7 +66,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate {
         controlButton.action = #selector(toggleControl)
         controlButton.toolTip = "Use the VM's mouse and keyboard yourself (⇧⌘K). Connected agents are locked out while you do."
         // The title changes with the state, so hold the button at the width of the wider of
-        // the two: otherwise Restart VM shifts sideways every time control is taken.
+        // the two: a centred button would otherwise jump sideways every time control is taken.
         controlButton.title = "Release Control"
         controlButton.sizeToFit()
         let controlWidth = controlButton.frame.width
@@ -73,25 +74,29 @@ final class MainWindowController: NSWindowController, NSWindowDelegate {
         controlButton.sizeToFit()
         controlButton.widthAnchor.constraint(
             equalToConstant: max(controlWidth, controlButton.frame.width)).isActive = true
-        restartButton.target = self
-        restartButton.action = #selector(restartVM)
-        restartButton.toolTip = "Boot the VM fresh, discarding anything in it"
         statusLabel.lineBreakMode = .byTruncatingTail
         statusLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        // The status line is kept out of the window: everything it says also goes to the system
+        // log (see `note`), and an empty strip of text beside the VM's screen spoils the edgeless
+        // look. NSStackView detaches hidden views, so the button below the screen is centred on
+        // the window rather than pushed off centre by a label nobody can see.
+        statusLabel.isHidden = true
 
-        for view in [statusLabel, NSView(), controlButton, restartButton] { bar.addView(view, in: .leading) }
+        for view in [statusLabel, controlButton] { bar.addView(view, in: .leading) }
         bar.orientation = .horizontal
+        bar.alignment = .centerY
         display.translatesAutoresizingMaskIntoConstraints = false
         bar.translatesAutoresizingMaskIntoConstraints = false
         content.addSubview(display)
         content.addSubview(bar)
+        // The VM's screen is flush with the window: no margin on three sides, so the guest's
+        // desktop runs edge to edge and only the button bar below it is inset.
         NSLayoutConstraint.activate([
-            display.topAnchor.constraint(equalTo: content.topAnchor, constant: 8),
-            display.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 8),
-            display.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -8),
+            display.topAnchor.constraint(equalTo: content.topAnchor),
+            display.leadingAnchor.constraint(equalTo: content.leadingAnchor),
+            display.trailingAnchor.constraint(equalTo: content.trailingAnchor),
             bar.topAnchor.constraint(equalTo: display.bottomAnchor, constant: 8),
-            bar.leadingAnchor.constraint(equalTo: display.leadingAnchor),
-            bar.trailingAnchor.constraint(equalTo: display.trailingAnchor),
+            bar.centerXAnchor.constraint(equalTo: content.centerXAnchor),
             bar.bottomAnchor.constraint(equalTo: content.bottomAnchor, constant: -8),
         ])
     }
@@ -126,9 +131,10 @@ final class MainWindowController: NSWindowController, NSWindowDelegate {
 
     // MARK: window size
 
-    /// Everything in the content view that isn't the VM's screen: the margins and the button
-    /// bar. It's a fixed size, so the display view grows and shrinks with the window one for
-    /// one, and the window's aspect ratio follows from the display's plus this.
+    /// Everything in the content view that isn't the VM's screen: just the button bar below it,
+    /// since the screen itself is flush with the window's edges. It's a fixed size, so the
+    /// display view grows and shrinks with the window one for one, and the window's aspect
+    /// ratio follows from the display's plus this.
     private var chrome: NSSize {
         guard let content = window?.contentView else { return .zero }
         content.layoutSubtreeIfNeeded()  // the bar's height has to be real to be subtracted
@@ -190,8 +196,8 @@ final class MainWindowController: NSWindowController, NSWindowDelegate {
         return frame
     }
 
-    /// The one status line. Transient messages (`note`) stay up until the next one or until
-    /// something about the VM changes, since there's no output pane to scroll back through.
+    /// The status line, which is hidden (see `buildUI`): it still carries the text MCPHost
+    /// reports, and `note` puts every message in the system log, which is where they're read.
     private func setStatus(_ text: String) { statusLabel.stringValue = text }
 
     /// Shows a line and keeps a copy in the system log (Console.app), which is where the
@@ -205,7 +211,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate {
         if controlButton.state == .on {
             setStatus("You have control — your mouse and keyboard go to the VM")
         } else if !vm.isRunning {
-            setStatus("VM stopped. Click Restart VM to boot it again.")
+            setStatus("VM stopped. Use VM → Restart VM to boot it again.")
         } else if rfb == nil {
             setStatus(vm.resuming ? "Resuming the VM…" : "Starting the VM…")
         } else if MCPServer.isAllowed {
@@ -278,7 +284,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate {
 
     private func vmExited(_ code: Int32) {
         tearDownClients()
-        setStatus("VM stopped (exit code \(code)). Click Restart VM to boot it again.")
+        setStatus("VM stopped (exit code \(code)). Use VM → Restart VM to boot it again.")
         if let log = try? String(contentsOf: vm.qemuLogURL, encoding: .utf8), !log.isEmpty {
             NSLog("Novie: QEMU output:\n%@", log)
         }
@@ -302,7 +308,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate {
         }
         isSaving = true
         setStatus("Saving the VM so it resumes next time…")
-        for control in [controlButton, restartButton, mcpSwitch] as [NSControl] { control.isEnabled = false }
+        for control in [controlButton, mcpSwitch] as [NSControl] { control.isEnabled = false }
         // Let go of anything held: a key still down when the state is written comes back
         // down when the VM is resumed
         display.controlEnabled = false
@@ -319,7 +325,11 @@ final class MainWindowController: NSWindowController, NSWindowDelegate {
         }
     }
 
-    @objc private func restartVM() {
+    /// VM → Restart VM. The button that used to do this is gone from the window, so the menu
+    /// item is the only way to ask for it.
+    func restartVMFromMenu() { restartVM() }
+
+    private func restartVM() {
         if vm.isRunning {
             let alert = NSAlert()
             alert.messageText = "Restart the VM?"
@@ -419,7 +429,7 @@ extension MainWindowController: MCPHost {
         }
         guard !isSaving else { return .refused("Novie is quitting and saving the VM.") }
         guard vm.isRunning else {
-            return .refused("The VM isn't running. The person at the Mac can start it again with Restart VM.")
+            return .refused("The VM isn't running. The person at the Mac can start it again with VM → Restart VM.")
         }
         guard let rfb, rfb.width > 0 else {
             return .refused("The VM's display isn't up yet — it may still be starting. Try again in a few seconds.")

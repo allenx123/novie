@@ -51,6 +51,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         return true
     }
 
+    @objc private func restartVM() { controller?.restartVMFromMenu() }
+
     @objc private func showVMLog() { controller?.showVMLog() }
 
     private func makeMenu() -> NSMenu {
@@ -84,6 +86,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         let control = vm.addItem(withTitle: "Take / Release Control", action: #selector(toggleControl), keyEquivalent: "k")
         control.keyEquivalentModifierMask = [.command, .shift]
         control.target = self
+        vm.addItem(.separator())
+        // The window has no Restart VM button any more, so this item is the only way to ask for
+        // a fresh boot. It keeps its confirmation alert (see MainWindowController.restartVM).
+        let restart = vm.addItem(withTitle: "Restart VM", action: #selector(restartVM), keyEquivalent: "")
+        restart.toolTip = "Boot the VM fresh, discarding anything in it"
+        restart.target = self
+        vm.addItem(.separator())
         vm.addItem(withTitle: "Show VM Log", action: #selector(showVMLog), keyEquivalent: "").target = self
         main.addItem(submenu: vm, title: "VM")
 

@@ -43,7 +43,7 @@ only the first build pays for it; `./build.sh --force-image` builds it again.
 3. **Take Control** (⇧⌘K) forwards your mouse and keyboard to the VM (orange border) and locks
    MCP clients out, screenshots included. Click it again to hand control back. ⌘ shortcuts stay
    with macOS; use Control for shortcuts inside the VM.
-4. **Restart VM** boots it fresh.
+4. **VM → Restart VM** boots it fresh (there is no button for it in the window).
 5. **Hide Novie** (⌘H) gets the window out of the way while an agent keeps working in it.
 
 The guest logs itself in as `novie`, an ordinary user, with no prompt (`agetty --autologin`), and
@@ -268,8 +268,9 @@ right.
 
 Logs: `~/Library/Application Support/Novie/serial.log` (guest console) and `qemu.log`.
 In the app, use VM → Show VM Log. The install's own console log is `guest/image/provision.log`.
-The window has one status line and no output pane, so the app's own messages go to the system
-log — `log stream --predicate 'eventMessage CONTAINS "Novie:"'`, or Console.app.
+The window shows the VM's screen and nothing else — its status line is hidden, so the app's own
+messages are only in the system log — `log stream --predicate 'eventMessage CONTAINS "Novie:"'`,
+or Console.app.
 
 ## Project layout
 
@@ -567,7 +568,9 @@ log — `log stream --predicate 'eventMessage CONTAINS "Novie:"'`, or Console.ap
   goes in as a keysym rather than through AppKit.
 - The guest's software rendering is llvmpipe, so there's no GPU acceleration in the VM. QEMU can
   pass virgl through, but not with its VNC server as the display.
-- The window has one status line and no history; details go to the system log.
+- The window has no status line at all: it is built but hidden (`MainWindowController.buildUI`),
+  so the VM's screen runs edge to edge, and everything the app has to say — including why a
+  resume was abandoned or a VM exited — is only in the system log.
 - The bundled QEMU is a full Homebrew build (~50 MB with libraries); most of its features and
   libraries (gnutls, libssh, libusb, ...) are unused here.
 - The guest image is ~2.0 GB, and the app bundle carries all of it (so the bundle is ~2.1 GB).
