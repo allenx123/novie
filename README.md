@@ -39,7 +39,7 @@ codex mcp add novie -- /Applications/Novie.app/Contents/MacOS/NovieMCP --mcp
 
 ## Features
 
-- **Lightweight VM sandbox runs locally in your MacOS.** Comes with a terminal, file manager and Firefox.
+- **Lightweight VM sandbox runs locally in your MacOS.** Comes with a terminal, file manager and Firefox, Chromium, and LibreOffice.
 - **Let an AI agent use it.** Turn on MCP in the menu and an agent can perform mouse/keyboard actions in the desktop.
 - **You can use it yourself.** Hit Take Control and your mouse and keyboard go to the VM.
 - **Only one of you at a time.** While you have control, the agent is locked out.

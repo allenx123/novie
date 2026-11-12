@@ -1,0 +1,72 @@
+<?xml version="1.0"?>
+<!--
+  Novie: the LibreOffice defaults that keep a modal dialog off the screen.
+
+  Every setting here is one that LibreOffice would otherwise decide by looking at a user
+  profile, and the profile is new on every fresh boot: the guest's disk is a throwaway
+  overlay, so first run is *every* run here, exactly as it is for Chromium (see
+  etc/chromium/zz-novie.conf). Left alone, Writer opens behind the modal "Tip of the Day"
+  and possibly the "What's New" dialog, which an MCP client has nothing but pixels to tell
+  apart from the document it asked for.
+
+  This is a configuration layer, not a replacement for anything: LibreOffice parses every
+  *.xcd in this directory, the <dependency> below makes it parse main.xcd (where all of
+  these properties are defined, with the opposite default) first, and the name sorts after
+  the ones the packages ship (main, writer, calc, impress, ...). A user's own
+  ~/.config/libreoffice/4/user/registrymodifications.xcu still wins over it, so nothing in
+  the UI is frozen: unchecking "Show tips on startup" would still stick for as long as the
+  disk overlay lives.
+-->
+<oor:data xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:oor="http://openoffice.org/2001/registry">
+  <dependency file="main"/>
+
+  <oor:component-data oor:name="Common" oor:package="org.openoffice.Office">
+    <node oor:name="Misc">
+      <!-- The modal dialog in front of the document on first run. -->
+      <prop oor:name="ShowTipOfTheDay" oor:type="xs:boolean"><value>false</value></prop>
+      <!-- "the office has never before been started": what the first-start jobs hang off. -->
+      <prop oor:name="FirstRun" oor:type="xs:boolean"><value>false</value></prop>
+    </node>
+    <node oor:name="Save">
+      <node oor:name="Document">
+        <!-- "Use Word 2007-365 format?" on every save to a non-ODF format. An agent asked to
+             write a .docx would meet it after Ctrl+S, not before. -->
+        <prop oor:name="WarnAlienFormat" oor:type="xs:boolean"><value>false</value></prop>
+      </node>
+    </node>
+  </oor:component-data>
+
+  <oor:component-data oor:name="Setup" oor:package="org.openoffice">
+    <node oor:name="Product">
+      <!-- Shown when the version differs from the profile's last-seen one, which a profile
+           that has never seen a version does too. WhatsNewDialog is the modal; WhatsNew is
+           the infobar it falls back to. -->
+      <prop oor:name="WhatsNew" oor:type="xs:boolean"><value>false</value></prop>
+      <prop oor:name="WhatsNewDialog" oor:type="xs:boolean"><value>false</value></prop>
+    </node>
+  </oor:component-data>
+
+  <oor:component-data oor:name="Impress" oor:package="org.openoffice.Office">
+    <node oor:name="Misc">
+      <node oor:name="NewDoc">
+        <!-- "Select a Template", modal, in front of Impress every time it makes a new
+             presentation: the only one of these dialogs that is not strictly a first-run
+             thing, since its "Show this dialog at startup" box lives in a profile that is
+             new on every boot. Impress starts on a blank slide with it off. -->
+        <prop oor:name="AutoPilot" oor:type="xs:boolean"><value>false</value></prop>
+      </node>
+    </node>
+  </oor:component-data>
+
+  <oor:component-data oor:name="Infobar" oor:package="org.openoffice.Office.UI">
+    <node oor:name="Enabled">
+      <!-- Not modal, but they take a strip off the top of the document and look enough like
+           part of it to be worth not having. The infobars that say something about the
+           document itself (read-only, signatures, blocked macros) are left on. -->
+      <prop oor:name="Donate" oor:type="xs:boolean"><value>false</value></prop>
+      <prop oor:name="GetInvolved" oor:type="xs:boolean"><value>false</value></prop>
+      <prop oor:name="WhatsNew" oor:type="xs:boolean"><value>false</value></prop>
+      <prop oor:name="HyphenationMissing" oor:type="xs:boolean"><value>false</value></prop>
+    </node>
+  </oor:component-data>
+</oor:data>

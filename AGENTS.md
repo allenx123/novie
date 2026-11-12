@@ -250,8 +250,15 @@ boots. There is no way to run `apk` on macOS, so the install happens in a throwa
 The desktop it produces is XFCE with xfce4-terminal, Thunar and two browsers -- Firefox, and
 Chromium from Alpine's community repo, whose package installs `/usr/bin/chromium` and
 `/usr/bin/chromium-browser` both, so neither name needs making here. Chromium is the default
-browser, by both of the mechanisms that decide that (see *Gotchas*). Fonts are DejaVu and
-FreeFont (`font-freefont`, which is what Alpine now calls `ttf-freefont`). It is logged in with no
+browser, by both of the mechanisms that decide that (see *Gotchas*). LibreOffice Writer, Calc
+and Impress are there too, from the same repo, with `libreoffice-gtk` so they draw themselves
+in GTK3 like the rest of the desktop and use its file dialog; they are in the applications
+menu under Office, and Thunar opens the formats they register (`.odt`, `.docx`, `.xlsx`,
+`.pptx`, and plain text, which nothing else in the guest claimed). Fonts are DejaVu, FreeFont
+(`font-freefont`, which is what Alpine now calls `ttf-freefont`) and Liberation, which is what
+LibreOffice's own styles ask for and what it substitutes, metric for metric, for Times New
+Roman, Arial and Courier New. `hunspell-en-us` is the dictionary its spellchecker reads out of
+`/usr/share/hunspell`. It is logged in with no
 prompt as `novie`, a normal user in the `video`, `input`, `audio` and `netdev` groups. Everything in the
 guest is configured at this point; at runtime the only things of ours in it are three small shell
 scripts, all run by openrc before the desktop starts: `local.d/novie-timezone.start`, which sets
@@ -272,7 +279,7 @@ log — `log stream --predicate 'eventMessage CONTAINS "Novie:"'`, or Console.ap
 | `guest/build_image.sh` | Builds and caches the guest disk image; the entry point for everything below. |
 | `guest/provision.py` | Host side of the install: runs the throwaway QEMU VM and drives its serial console. |
 | `guest/provision.sh` | Guest side of the install: partitions, installs Alpine + XFCE, configures and bootloads it. |
-| `guest/overlay/` | Files copied into the guest's root filesystem: the inittab that autologins `novie` into X, `home/novie/.xinitrc` (the XFCE session) with that user's `.profile`, xfconf overrides and helper registrations, `etc/X11/Xwrapper.config` (how a non-root user is allowed to start X), `etc/xdg/mimeapps.list` (which browser opens a link), `etc/chromium/zz-novie.conf` (the flags Chromium always gets), `etc/polkit-1/rules.d/50-novie.rules`, `etc/local.d/novie-timezone.start` and `novie-runtimedir.start`, and `usr/local/bin/novie-clock` with the `etc/init.d/novie-clock` service that supervises it. |
+| `guest/overlay/` | Files copied into the guest's root filesystem: the inittab that autologins `novie` into X, `home/novie/.xinitrc` (the XFCE session) with that user's `.profile`, xfconf overrides and helper registrations, `etc/X11/Xwrapper.config` (how a non-root user is allowed to start X), `etc/xdg/mimeapps.list` (which browser opens a link), `etc/chromium/zz-novie.conf` (the flags Chromium always gets), `usr/lib/libreoffice/share/registry/zz-novie.xcd` (the LibreOffice defaults that keep its first-run dialogs off the screen), `etc/polkit-1/rules.d/50-novie.rules`, `etc/local.d/novie-timezone.start` and `novie-runtimedir.start`, and `usr/local/bin/novie-clock` with the `etc/init.d/novie-clock` service that supervises it. |
 | `app/src/` | The Swift app: `VMManager` (QEMU launch/args, the disk overlay, suspend/resume), `QMPClient` (QEMU control socket), `RFBClient` (VNC client: framebuffer + input), `ComputerActions` (`VMInput` and the `ActionRunner` that plays an action list), `VMDisplayView` (rendering + mouse/keyboard forwarding for take control), `MainWindowController` (the window and `MCPHost`), `MCPServer` (socket other agents drive the VM through) and `MCPBridge` (the `--mcp` stdio MCP server). |
 | `app/Package.swift` | For opening the sources in Xcode only; `build.sh` uses `swiftc`, and `swift test` does not work here (see *Tests*). |
 | `app/tests/` | The unit tests and their harness: `Harness.swift` (`suite`/`expect`/`equal`), `main.swift` (entry point), `Fakes.swift` (`FakeInput`, `FakeHost`, the fake socket server) and one file per source file under test. |
@@ -359,6 +366,40 @@ log — `log stream --predicate 'eventMessage CONTAINS "Novie:"'`, or Console.ap
   loses `DBUS_SESSION_BUS_ADDRESS`, so libsecret finds no bus, Chromium falls back silently and
   the dialog never appears. Reproducing it needs the session's whole environment, the way the
   panel launches things.
+- **LibreOffice has the same first-run problem as Chromium, and several of its dialogs are
+  modal.** A profile that has never been used gets the "Tip of the Day" dialog in front of the
+  document, and a profile whose last-seen version isn't the installed one can get "What's New"
+  as well -- and the profile is new on every fresh boot here, so first run is every run.
+  Impress adds its own: "Select a Template", in front of every new presentation, whose "Show
+  this dialog at startup" box is itself kept in that throwaway profile (measured: it was the
+  first thing on screen when Impress was started from the applications menu). Writing to a
+  `.docx` adds one more ("Use Word 2007-365 format?", on each save), which an agent would meet
+  after Ctrl+S rather than before.
+  `guest/overlay/usr/lib/libreoffice/share/registry/zz-novie.xcd` turns all of them off
+  (`ShowTipOfTheDay`, `FirstRun`, `WhatsNew`/`WhatsNewDialog`, `Impress/Misc/NewDoc/AutoPilot`,
+  `WarnAlienFormat`) plus the donate/get-involved/missing-hyphenation infobars, which are not
+  modal but eat a strip of the document and look like part of it. It is a layer over the
+  registry the packages ship, not a replacement for any file in it: LibreOffice parses every
+  `*.xcd` in `share/registry`, the `<dependency file="main"/>` in it makes `main.xcd` -- where
+  all of those properties are defined with the opposite default -- parse first, and the name
+  sorts after `writer.xcd`, `calc.xcd` and the rest. A user's own
+  `~/.config/libreoffice/4/user/registrymodifications.xcu` still overrides it, so nothing is
+  frozen in Tools -> Options. Because it lands in a directory the package creates,
+  `provision.sh` checks `main.xcd` is actually next to it after the overlay is copied: a moved
+  registry would otherwise leave `cp -a` creating an empty directory and the dialogs back with
+  nothing to say so.
+- **LibreOffice's save dialog opens taller than the guest's screen.** With `libreoffice-gtk`
+  installed the file picker is GTK3's, and it comes up about 830 px tall against a 800 px
+  screen, so its file-type dropdown and its Save button are below the bottom edge and an agent
+  driving by pixels can't see them. Double-clicking the dialog's title bar maximizes it and
+  brings both into view (the keyboard path -- type the name, press Return -- saves in the
+  format the dropdown already has). Nothing in the guest fixes this; it is worth knowing before
+  concluding the dialog is broken.
+- **`libreoffice-gtk` has to be asked for by name.** It is an `install_if` package keyed on the
+  `libreoffice` meta-package (`i:libreoffice=` in the index), and nothing here installs that
+  meta-package -- only the three application subpackages. Install those alone and the suite
+  runs on its own plain-X11 VCL plugin: Motif-looking widgets, LibreOffice's own file dialog
+  instead of GTK's, and no theme or font settings shared with XFCE.
 - **"Default browser" is two settings, and installing a second browser split them.** The panel's
   Web Browser button asks exo, which reads `helpers.rc`; a link opened through `xdg-open` or GIO
   — from Thunar, or any app that shells out — asks the XDG mime database instead, and nothing in
@@ -529,9 +570,11 @@ log — `log stream --predicate 'eventMessage CONTAINS "Novie:"'`, or Console.ap
 - The window has one status line and no history; details go to the system log.
 - The bundled QEMU is a full Homebrew build (~50 MB with libraries); most of its features and
   libraries (gnutls, libssh, libusb, ...) are unused here.
-- The guest image is ~1.4 GB, and the app bundle carries all of it. Chromium is about 400 MB of
-  that: dropping it from `PACKAGES` in `provision.sh` takes the image back to ~1.0 GB with
-  Firefox still there.
+- The guest image is ~2.0 GB, and the app bundle carries all of it (so the bundle is ~2.1 GB).
+  Chromium is about 400 MB of that and LibreOffice about 600 MB, most of which is the
+  `libreoffice-common` all three applications depend on: dropping either from `PACKAGES` in
+  `provision.sh` takes the image down by about that much, and dropping both takes it back to
+  ~1.0 GB with Firefox still there.
 - If the VM config changes (other devices, a different NIC model), the firmware it loads may need
   adding to `rom_files` in `bundle_qemu.sh`. Test with Homebrew hidden:
   `sandbox-exec -p '(version 1)(allow default)(deny file-read* (subpath "/opt/homebrew"))' <app>/Contents/MacOS/qemu-system-aarch64 -L <app>/Contents/Resources/qemu ...`

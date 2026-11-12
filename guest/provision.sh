@@ -23,6 +23,15 @@ step() { echo; echo "### novie: $*"; }
 # written) and replaces it with every security release, so a pin is a build that breaks on
 # Alpine's schedule rather than ours. font-freefont is what Alpine now calls ttf-freefont,
 # which it still answers to as a `provides` alias; the real name is used, like font-dejavu.
+#
+# libreoffice-{writer,calc,impress} are in community too, on top of the 325 MB
+# libreoffice-common they all depend on. libreoffice-gtk has to be named: it is an install_if
+# package, keyed on the `libreoffice` meta-package nothing here installs, so without it the
+# suite falls back to its own plain-X11 VCL plugin and its own file dialog instead of looking
+# like the rest of the XFCE desktop. font-liberation is what LibreOffice's default styles ask
+# for, and what it substitutes metric-for-metric for Times New Roman, Arial and Courier New,
+# so a .docx written elsewhere lays out the way it did there; hunspell-en-us is the
+# dictionary its spellchecker looks for in /usr/share/hunspell.
 PACKAGES="
 alpine-base linux-virt
 grub grub-efi
@@ -36,6 +45,8 @@ dbus dbus-x11 elogind polkit-elogind
 xfce4 xfce4-terminal xfce4-screenshooter
 adwaita-icon-theme font-dejavu font-freefont
 firefox chromium
+libreoffice-writer libreoffice-calc libreoffice-impress libreoffice-gtk
+font-liberation hunspell-en-us
 nano
 "
 
@@ -95,8 +106,9 @@ apk add --root /mnt --initdb --no-cache --no-progress $PACKAGES
 
 step "copying the guest overlay in"
 # guest/overlay in the repo: the inittab that autologins into X, the desktop user's X session
-# and XFCE settings, and the startup scripts that take the host's time zone out of fw_cfg and
-# make the session's runtime directory.
+# and XFCE settings, the startup scripts that take the host's time zone out of fw_cfg and
+# make the session's runtime directory, and the browser and LibreOffice settings that keep a
+# first-run dialog from being the first thing an MCP client sees.
 cp -a /seed/overlay/. /mnt/
 # The overlay is packed on a Mac, so without this every path it adds arrives owned by whoever
 # ran the build (uid 501, typically). Everything in it is root's except the desktop user's
@@ -106,6 +118,13 @@ cp -a /seed/overlay/. /mnt/
 done
 chmod +x /mnt/home/novie/.xinitrc /mnt/etc/local.d/*.start \
          /mnt/etc/init.d/novie-clock /mnt/usr/local/bin/novie-clock
+# The LibreOffice defaults in the overlay are a layer over the registry the packages ship,
+# dropped in beside main.xcd. If that directory ever moves, `cp -a` above would quietly
+# create an empty one and the modal first-run dialogs would be back, with nothing to say so.
+[ -f /mnt/usr/lib/libreoffice/share/registry/main.xcd ] || {
+    echo "LibreOffice's registry is not where the overlay puts zz-novie.xcd" >&2
+    exit 1
+}
 
 step "configuring the installed system"
 cat > /mnt/etc/fstab <<'EOF'
