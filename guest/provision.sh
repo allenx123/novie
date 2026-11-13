@@ -106,9 +106,9 @@ apk add --root /mnt --initdb --no-cache --no-progress $PACKAGES
 
 step "copying the guest overlay in"
 # guest/overlay in the repo: the inittab that autologins into X, the desktop user's X session
-# and XFCE settings, the startup scripts that take the host's time zone out of fw_cfg and
-# make the session's runtime directory, and the browser and LibreOffice settings that keep a
-# first-run dialog from being the first thing an MCP client sees.
+# and XFCE settings, the desktop background, the startup scripts that take the host's time
+# zone out of fw_cfg and make the session's runtime directory, and the browser and LibreOffice
+# settings that keep a first-run dialog from being the first thing an MCP client sees.
 cp -a /seed/overlay/. /mnt/
 # The overlay is packed on a Mac, so without this every path it adds arrives owned by whoever
 # ran the build (uid 501, typically). Everything in it is root's except the desktop user's

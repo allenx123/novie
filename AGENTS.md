@@ -258,7 +258,9 @@ menu under Office, and Thunar opens the formats they register (`.odt`, `.docx`, 
 (`font-freefont`, which is what Alpine now calls `ttf-freefont`) and Liberation, which is what
 LibreOffice's own styles ask for and what it substitutes, metric for metric, for Times New
 Roman, Arial and Courier New. `hunspell-en-us` is the dictionary its spellchecker reads out of
-`/usr/share/hunspell`. It is logged in with no
+`/usr/share/hunspell`. The desktop background is the PNG the overlay drops in
+`/usr/share/backgrounds/novie/`, which `~novie/.xinitrc` points xfdesktop at as the session
+starts (see *Gotchas* for why it is done there and not in a shipped xfconf file). It is logged in with no
 prompt as `novie`, a normal user in the `video`, `input`, `audio` and `netdev` groups. Everything in the
 guest is configured at this point; at runtime the only things of ours in it are three small shell
 scripts, all run by openrc before the desktop starts: `local.d/novie-timezone.start`, which sets
@@ -280,7 +282,7 @@ or Console.app.
 | `guest/build_image.sh` | Builds and caches the guest disk image; the entry point for everything below. |
 | `guest/provision.py` | Host side of the install: runs the throwaway QEMU VM and drives its serial console. |
 | `guest/provision.sh` | Guest side of the install: partitions, installs Alpine + XFCE, configures and bootloads it. |
-| `guest/overlay/` | Files copied into the guest's root filesystem: the inittab that autologins `novie` into X, `home/novie/.xinitrc` (the XFCE session) with that user's `.profile`, xfconf overrides and helper registrations, `etc/X11/Xwrapper.config` (how a non-root user is allowed to start X), `etc/xdg/mimeapps.list` (which browser opens a link), `etc/chromium/zz-novie.conf` (the flags Chromium always gets), `usr/lib/libreoffice/share/registry/zz-novie.xcd` (the LibreOffice defaults that keep its first-run dialogs off the screen), `etc/polkit-1/rules.d/50-novie.rules`, `etc/local.d/novie-timezone.start` and `novie-runtimedir.start`, and `usr/local/bin/novie-clock` with the `etc/init.d/novie-clock` service that supervises it. |
+| `guest/overlay/` | Files copied into the guest's root filesystem: the inittab that autologins `novie` into X, `home/novie/.xinitrc` (the XFCE session) with that user's `.profile`, xfconf overrides and helper registrations, `etc/X11/Xwrapper.config` (how a non-root user is allowed to start X), `etc/xdg/mimeapps.list` (which browser opens a link), `usr/share/backgrounds/novie/novie_desktop_background.png` (the desktop background), `etc/chromium/zz-novie.conf` (the flags Chromium always gets), `usr/lib/libreoffice/share/registry/zz-novie.xcd` (the LibreOffice defaults that keep its first-run dialogs off the screen), `etc/polkit-1/rules.d/50-novie.rules`, `etc/local.d/novie-timezone.start` and `novie-runtimedir.start`, and `usr/local/bin/novie-clock` with the `etc/init.d/novie-clock` service that supervises it. |
 | `app/src/` | The Swift app: `VMManager` (QEMU launch/args, the disk overlay, suspend/resume), `QMPClient` (QEMU control socket), `RFBClient` (VNC client: framebuffer + input), `ComputerActions` (`VMInput` and the `ActionRunner` that plays an action list), `VMDisplayView` (rendering + mouse/keyboard forwarding for take control), `MainWindowController` (the window and `MCPHost`), `MCPServer` (socket other agents drive the VM through) and `MCPBridge` (the `--mcp` stdio MCP server). |
 | `app/Package.swift` | For opening the sources in Xcode only; `build.sh` uses `swiftc`, and `swift test` does not work here (see *Tests*). |
 | `app/tests/` | The unit tests and their harness: `Harness.swift` (`suite`/`expect`/`equal`), `main.swift` (entry point), `Fakes.swift` (`FakeInput`, `FakeHost`, the fake socket server) and one file per source file under test. |
@@ -415,6 +417,21 @@ or Console.app.
   definition with it, and the desktop came up as nothing but an "Unable to load a failsafe session"
   dialog. Per-user overrides go in `~novie/.config/xfce4/xfconf/xfce-perchannel-xml/`, which
   xfconf merges over the system defaults, and that is where `guest/overlay` keeps them.
+- **xfdesktop keys the desktop background by the monitor's connector name**, so the background
+  cannot simply be shipped as a file in the overlay. The backdrop it draws comes from
+  `/backdrop/screen0/monitor<connector>/workspace0/last-image` in the `xfce4-desktop` channel
+  (`xfdesktop-backdrop-manager.c` builds that path from `xfw_monitor_get_connector()`), and the
+  connector is whatever RandR calls the output -- `Virtual-1` for `virtio-gpu-pci` here, which
+  nothing on the Mac can know while the image is being built. A property under any other
+  monitor name is never read, and nothing says so: the desktop just comes up with the solid
+  colour `xsetroot` left behind it. So `~novie/.xinitrc` asks `xrandr` for the name and writes
+  `xfce4-desktop.xml` into the per-user xfconf store itself, before `startxfce4`, which is also
+  early enough that xfconfd has it on its first read and the image is on the desktop's first
+  frame. Two values in that file are worth knowing: `image-style` 5 is
+  `XFCE_BACKDROP_IMAGE_ZOOMED` (fill and crop, rather than stretching a 2880x1594 image onto a
+  1280x800 screen), and `single-workspace-mode` has to be turned on because xfdesktop 4.20
+  defaults it off -- without it the other three workspaces XFCE makes would each look up a
+  backdrop of their own and find none.
 - **`chronyd` does not fix the clock of a resumed VM, and two separate things stop it.** The
   first is that Alpine's `chrony.conf` ships `makestep 1.0 3`, so chronyd may jump the clock only
   during its first three clock updates — every session spends those in its first minutes, and
